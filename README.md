@@ -31,7 +31,6 @@ Audit + analyst feedback
 ```
 
 - RBAC is enforced in the backend data-access layer before restricted data is passed to the agents.
-- The prototype uses preloaded synthetic AML data for customers, accounts, transactions, alerts and sanctions screening. Regulatory knowledge is derived from publicly available RBI material and indexed for retrieval.
 - Prompt-injection defense is not implemented in the current version and is treated as a deferred bonus feature.
 
 
@@ -40,6 +39,8 @@ The system uses two agents:
 * **Screening Agent** — gathers authorized transaction, customer, alert and sanctions evidence and calculates deterministic risk signals.
 * **Investigation Agent** — receives the screening package and retrieves relevant regulatory evidence before producing the investigation findings.
 
+## Note
+- The prototype uses preloaded synthetic AML data for customers, accounts, transactions, alerts and sanctions screening. Regulatory knowledge is derived from publicly available RBI material and indexed for retrieval.
 
 ## Setup
 
