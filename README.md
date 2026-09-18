@@ -35,8 +35,8 @@ The system uses two agents:
 * **Screening Agent** — gathers authorized transaction, customer, alert and sanctions evidence and calculates deterministic risk signals.
 * **Investigation Agent** — receives the screening package and retrieves relevant regulatory evidence before producing the investigation findings.
 
-RBAC is enforced in the backend data-access layer before restricted data is passed to the agents.
-
+- RBAC is enforced in the backend data-access layer before restricted data is passed to the agents.
+- The prototype uses preloaded synthetic AML data for customers, accounts, transactions, alerts and sanctions screening. Regulatory knowledge is derived from publicly available RBI material and indexed for retrieval.
 
 ## Setup
 
