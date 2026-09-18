@@ -1,3 +1,4 @@
+
 from datetime import datetime
 from typing import Any
 
@@ -36,6 +37,17 @@ UNUSUAL_GEOGRAPHY_WEIGHT = 15
 MULTIPLE_TRANSACTIONS_WEIGHT = 10
 
 
+# Historical feedback adjustments.
+#
+# These values affect future investigation prioritization only.
+# They do NOT change the underlying deterministic risk signals.
+FEEDBACK_ADJUSTMENTS = {
+    "TRUE HIT": 10.0,
+    "FALSE POSITIVE": -10.0,
+    "ESCALATED": 5.0,
+}
+
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -60,6 +72,20 @@ def _normalized_country(country: str | None) -> str:
         return ""
 
     return country.strip().lower()
+
+
+def _risk_level(score: float) -> str:
+    """
+    Convert a numeric score into the prototype risk level.
+    """
+
+    if score >= 70:
+        return "HIGH"
+
+    if score >= 40:
+        return "MEDIUM"
+
+    return "LOW"
 
 
 # ============================================================
@@ -330,12 +356,18 @@ def calculate_risk(
     The score is derived entirely from explicit rules.
     No LLM is involved.
 
+    The returned score is the ORIGINAL deterministic risk score.
+
     Returns:
         {
             "score": int,
             "risk_level": str,
             "signals": [...],
-            "transaction_count": int
+            "transaction_count": int,
+            "original_score": int,
+            "feedback_adjustment": 0.0,
+            "adjusted_score": int,
+            "adjusted_risk_level": str,
         }
     """
 
@@ -345,6 +377,10 @@ def calculate_risk(
             "risk_level": "LOW",
             "signals": [],
             "transaction_count": 0,
+            "original_score": 0,
+            "feedback_adjustment": 0.0,
+            "adjusted_score": 0,
+            "adjusted_risk_level": "LOW",
         }
 
     signals = []
@@ -377,34 +413,51 @@ def calculate_risk(
     # Cap the prototype score at 100.
     score = min(score, 100)
 
-    if score >= 70:
-        risk_level = "HIGH"
-    elif score >= 40:
-        risk_level = "MEDIUM"
-    else:
-        risk_level = "LOW"
+    risk_level = _risk_level(score)
 
     return {
         "score": score,
         "risk_level": risk_level,
         "signals": signals,
         "transaction_count": len(transactions),
+        "original_score": score,
+        "feedback_adjustment": 0.0,
+        "adjusted_score": score,
+        "adjusted_risk_level": risk_level,
     }
 
 
+# ============================================================
+# HISTORICAL FEEDBACK / PRIORITIZATION
+# ============================================================
+
 
 def apply_historical_feedback(
-    risk_assessment: dict,
+    risk_assessment: dict[str, Any],
     feedback_records: list,
-) -> dict:
+) -> dict[str, Any]:
     """
-    Apply relevant historical feedback to an existing deterministic
-    risk assessment.
+    Apply relevant historical analyst feedback to an existing
+    deterministic risk assessment.
 
-    The original score is preserved. Feedback produces a separate
-    adjustment and adjusted score.
+    The original deterministic score is preserved in
+    ``original_score``.
+
+    For backward compatibility, ``score`` remains the
+    feedback-adjusted prioritization score.
+
+    ``adjusted_score`` is an explicit alias of that prioritization
+    score.
+
+    Feedback does not change the underlying deterministic signals.
     """
-    original_score = float(risk_assessment["score"])
+
+    original_score = float(
+        risk_assessment.get(
+            "original_score",
+            risk_assessment["score"],
+        )
+    )
 
     feedback_adjustment = 0.0
 
@@ -415,29 +468,57 @@ def apply_historical_feedback(
             else feedback.get("disposition")
         )
 
-        if disposition == "TRUE HIT":
-            feedback_adjustment += 10.0
-        elif disposition == "FALSE POSITIVE":
-            feedback_adjustment -= 10.0
-        elif disposition == "ESCALATED":
-            feedback_adjustment += 5.0
+        normalized_disposition = (
+            str(disposition).strip().upper()
+        )
+
+        feedback_adjustment += FEEDBACK_ADJUSTMENTS.get(
+            normalized_disposition,
+            0.0,
+        )
 
     adjusted_score = max(
         0.0,
-        min(100.0, original_score + feedback_adjustment),
+        min(
+            100.0,
+            original_score + feedback_adjustment,
+        ),
     )
 
-    if adjusted_score >= 70:
-        risk_level = "HIGH"
-    elif adjusted_score >= 40:
-        risk_level = "MEDIUM"
-    else:
-        risk_level = "LOW"
+    original_risk_level = _risk_level(
+        original_score
+    )
 
-    return {
-        **risk_assessment,
-        "original_score": original_score,
-        "feedback_adjustment": feedback_adjustment,
-        "score": adjusted_score,
-        "risk_level": risk_level,
-    }
+    adjusted_risk_level = _risk_level(
+        adjusted_score
+    )
+
+    result = dict(risk_assessment)
+
+    # ---------------------------------------------------------
+    # ORIGINAL DETERMINISTIC ASSESSMENT
+    # ---------------------------------------------------------
+
+    result["original_score"] = original_score
+    result["original_risk_level"] = original_risk_level
+    result["risk_level"] = adjusted_risk_level
+
+    # ---------------------------------------------------------
+    # HISTORICAL FEEDBACK
+    # ---------------------------------------------------------
+
+    result["feedback_adjustment"] = feedback_adjustment
+
+    # ---------------------------------------------------------
+    # FEEDBACK-ADJUSTED PRIORITIZATION
+    # ---------------------------------------------------------
+
+    # ``score`` remains adjusted for compatibility with the
+    # existing public contract and tests.
+    result["score"] = adjusted_score
+
+    result["adjusted_score"] = adjusted_score
+    result["adjusted_risk_level"] = adjusted_risk_level
+
+    return result
+

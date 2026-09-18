@@ -1,3 +1,4 @@
+
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -87,6 +88,7 @@ def _extract_transactions(result: dict) -> list[dict]:
 
     return []
 
+
 def _extract_alerts(result: dict) -> list[dict]:
     """
     Extract alerts from the controlled alert-search tool.
@@ -109,6 +111,7 @@ def _extract_alerts(result: dict) -> list[dict]:
         return alerts
 
     return []
+
 
 def _extract_sanctions(result: dict) -> list[dict]:
     """
@@ -259,8 +262,8 @@ def _risk_assessment(
     Run the deterministic risk engine and then apply relevant
     historical feedback.
 
-    The original deterministic score is preserved separately
-    from the feedback-adjusted score.
+    The original deterministic score and risk level are
+    preserved separately from the feedback-adjusted values.
     """
 
     if not transactions:
@@ -287,17 +290,38 @@ def _risk_assessment(
     ]
 
     return RiskAssessment(
+        # Effective/current risk after feedback
         score=result["score"],
         risk_level=result["risk_level"],
+
+        # Deterministic signals
         signals=signals,
         transaction_count=result["transaction_count"],
+
+        # Original risk before historical feedback
         original_score=result.get(
             "original_score",
             result["score"],
         ),
+        original_risk_level=result.get(
+            "original_risk_level",
+            result["risk_level"],
+        ),
+
+        # Historical feedback adjustment
         feedback_adjustment=result.get(
             "feedback_adjustment",
             0.0,
+        ),
+
+        # Explicit adjusted risk
+        adjusted_score=result.get(
+            "adjusted_score",
+            result["score"],
+        ),
+        adjusted_risk_level=result.get(
+            "adjusted_risk_level",
+            result["risk_level"],
         ),
     )
 
@@ -437,7 +461,7 @@ class ScreeningAgent:
         # =========================================================
         # 3. ALERT
         # =========================================================
-        
+
         if alert_id:
             alert_result = get_alert(
                 self.db,
@@ -467,8 +491,7 @@ class ScreeningAgent:
 
             if alert_matches:
                 alert_data = alert_matches[0]
-                alert_id = alert_data.get("alert_id") 
-       
+                alert_id = alert_data.get("alert_id")
 
         # =========================================================
         # 4. RELATED TRANSACTIONS
@@ -665,6 +688,18 @@ class ScreeningAgent:
         # 12. FINAL SCREENING PACKAGE
         # =========================================================
 
+        package_metadata = {
+            "customer_id": resolved_customer_id,
+            "transaction_id": transaction_id,
+            "alert_id": alert_id,
+            "generated_at": datetime.now(
+                timezone.utc
+            ).isoformat(),
+        }
+
+        # Keep the package-level metadata focused on identity
+        # and generation context. Risk state remains available
+        # through the structured RiskAssessment object.
         return InvestigationPackage(
             investigation_id=investigation_id,
             customer=customer,
@@ -673,12 +708,5 @@ class ScreeningAgent:
             sanctions=sanctions,
             risk_assessment=risk_assessment,
             evidence_sufficiency=evidence,
-            metadata={
-                "customer_id": resolved_customer_id,
-                "transaction_id": transaction_id,
-                "alert_id": alert_id,
-                "generated_at": datetime.now(
-                    timezone.utc
-                ).isoformat(),
-            },
+            metadata=package_metadata,
         )

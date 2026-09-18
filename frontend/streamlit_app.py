@@ -1,3 +1,4 @@
+
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,13 +10,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
 from sqlalchemy import text
+
 from app.agents.investigation_graph import build_investigation_graph
 from app.auth.context import UserContext
-from app.auth.permissions import Role
+from app.auth.permissions import Role, has_permission
 from app.db import SessionLocal
+from app.feedback.feedback_engine import (
+    DISPOSITION_ADJUSTMENTS,
+    persist_feedback,
+)
 from app.tools.investigation_tools import find_alerts
 from eval.run_evaluation import load_cases, run_case
+
 
 st.set_page_config(
     page_title="AML Investigator",
@@ -357,7 +365,6 @@ def display_regulatory_evidence(
         st.info(
             "No regulatory evidence returned."
         )
-
     else:
         for item in evidence:
             requirement_id = item.get(
@@ -413,6 +420,263 @@ def display_regulatory_evidence(
                 f"**Finding:** "
                 f"{finding.get('finding')}"
             )
+
+
+# ==================================================================
+# ANALYST FEEDBACK
+# ==================================================================
+
+def display_feedback_section(
+    user: UserContext,
+    result: dict,
+) -> None:
+    """
+    Render the analyst feedback section for a completed investigation.
+
+    Feedback is available only to roles with the existing
+    'feedback' permission.
+    """
+
+    if not has_permission(
+        user.role,
+        "feedback",
+    ):
+        return
+
+    final_result = (
+        result.get("final_result")
+        or {}
+    )
+
+    if final_result.get("success") is not True:
+        return
+
+    investigation = model_to_dict(
+        result.get(
+            "investigation_result"
+        )
+    )
+
+    package = model_to_dict(
+        result.get(
+            "investigation_package"
+        )
+    )
+
+    investigation_id = (
+        investigation.get("investigation_id")
+        or final_result.get("investigation_id")
+    )
+
+    if not investigation_id:
+        return
+
+    customer = model_to_dict(
+        package.get("customer")
+    )
+
+    transactions = model_list_to_dicts(
+        package.get("transactions")
+    )
+
+    customer_id = customer.get(
+        "customer_id"
+    )
+
+    transaction_id = None
+
+    if transactions:
+        transaction_id = transactions[0].get(
+            "transaction_id"
+        )
+
+    risk = model_to_dict(
+        package.get("risk_assessment")
+    )
+
+    signals = model_list_to_dicts(
+        risk.get("signals")
+    )
+
+    signal_names = [
+        signal.get("signal")
+        for signal in signals
+        if signal.get("signal")
+    ]
+
+    st.divider()
+
+    st.subheader(
+        "Analyst feedback"
+    )
+
+    st.caption(
+        "Record the analyst's disposition for this investigation. "
+        "Feedback affects future prioritization but does not alter "
+        "the original investigation result."
+    )
+
+    disposition = st.selectbox(
+        "Disposition",
+        [
+            "TRUE HIT",
+            "FALSE POSITIVE",
+            "ESCALATED",
+        ],
+        key=f"feedback_disposition_{investigation_id}",
+    )
+
+    selected_signal = None
+
+    if signal_names:
+        selected_signal = st.selectbox(
+            "Related risk signal",
+            [
+                "Investigation-level feedback",
+                *signal_names,
+            ],
+            key=f"feedback_signal_{investigation_id}",
+        )
+
+        if selected_signal == "Investigation-level feedback":
+            selected_signal = None
+
+    reason = st.text_area(
+        "Reason",
+        placeholder=(
+            "Explain why this investigation was classified "
+            "this way."
+        ),
+        key=f"feedback_reason_{investigation_id}",
+        height=100,
+    )
+
+    adjustment = DISPOSITION_ADJUSTMENTS[
+        disposition
+    ]
+
+    if adjustment > 0:
+        st.info(
+            f"This disposition contributes a "
+            f"+{adjustment} prototype prioritization adjustment "
+            f"to future investigations."
+        )
+
+    elif adjustment < 0:
+        st.info(
+            f"This disposition contributes a "
+            f"{adjustment} prototype prioritization adjustment "
+            f"to future investigations."
+        )
+
+    else:
+        st.info(
+            "This disposition does not change prioritization."
+        )
+
+    submitted_feedback = st.session_state.get(
+        f"feedback_submitted_{investigation_id}"
+    )
+
+    if not submitted_feedback:
+        if st.button(
+            "Submit Feedback",
+            type="primary",
+            width="stretch",
+            key=f"submit_feedback_{investigation_id}",
+        ):
+            if not reason.strip():
+                st.warning(
+                    "Enter a reason before submitting feedback."
+                )
+                return
+
+            db = SessionLocal()
+
+            try:
+                feedback = persist_feedback(
+                    db,
+                    investigation_id=investigation_id,
+                    user_id=user.user_id,
+                    customer_id=customer_id,
+                    transaction_id=transaction_id,
+                    disposition=disposition,
+                    reason=reason.strip(),
+                    signal=selected_signal,
+                )
+
+                st.session_state[
+                    f"feedback_submitted_{investigation_id}"
+                ] = {
+                    "disposition": feedback.disposition,
+                    "reason": feedback.reason,
+                    "adjustment": feedback.adjustment,
+                    "created_at": (
+                        feedback.created_at.isoformat()
+                    ),
+                }
+
+                st.rerun()
+
+            except Exception as exc:
+                st.error(
+                    f"Unable to save feedback: {exc}"
+                )
+
+            finally:
+                db.close()
+
+    submitted_feedback = st.session_state.get(
+        f"feedback_submitted_{investigation_id}"
+    )
+
+    if submitted_feedback:
+        st.success(
+            "Analyst feedback recorded successfully."
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Disposition",
+                submitted_feedback.get(
+                    "disposition",
+                    "N/A",
+                ),
+            )
+
+        with col2:
+            st.metric(
+                "Adjustment",
+                submitted_feedback.get(
+                    "adjustment",
+                    0,
+                ),
+            )
+
+        with col3:
+            st.write(
+                "**Recorded at:**"
+            )
+
+            st.write(
+                submitted_feedback.get(
+                    "created_at",
+                    "N/A",
+                )
+            )
+
+        st.write(
+            "**Reason:**"
+        )
+
+        st.write(
+            submitted_feedback.get(
+                "reason",
+                "",
+            )
+        )
 
 
 # ==================================================================
@@ -543,7 +807,10 @@ def display_audit_event(
             )
 
 
-def display_result(result: dict) -> None:
+def display_result(
+    user: UserContext,
+    result: dict,
+) -> None:
     """Render the final graph result."""
 
     final_result = (
@@ -556,11 +823,12 @@ def display_result(result: dict) -> None:
     # ---------------------------------------------------------
 
     if final_result.get("success") is False:
-        error_type = final_result.get(
-            "error_type"
-        ) or final_result.get(
-            "error",
-            "UNKNOWN_ERROR",
+        error_type = (
+            final_result.get("error_type")
+            or final_result.get(
+                "error",
+                "UNKNOWN_ERROR",
+            )
         )
 
         message = final_result.get(
@@ -582,7 +850,6 @@ def display_result(result: dict) -> None:
         st.error(
             "The investigation returned no final result."
         )
-
         return
 
     # ---------------------------------------------------------
@@ -734,6 +1001,15 @@ def display_result(result: dict) -> None:
         f"{investigation.get('investigation_id', 'N/A')}"
     )
 
+    # ---------------------------------------------------------
+    # ANALYST FEEDBACK
+    # ---------------------------------------------------------
+
+    display_feedback_section(
+        user=user,
+        result=result,
+    )
+
 
 # ==================================================================
 # ALERTS
@@ -865,7 +1141,6 @@ def display_alerts_page(
                     "alert_investigation_active"
                 ] = False
 
-                # Clear any previous alert investigation result.
                 st.session_state[
                     "alert_investigation_result"
                 ] = None
@@ -884,7 +1159,6 @@ def display_alerts_page(
             "No alerts loaded. "
             "Enter a customer or transaction ID and click Load Alerts."
         )
-
         return
 
     st.subheader(
@@ -940,7 +1214,6 @@ def display_alerts_page(
         st.warning(
             "The alert results did not contain alert IDs."
         )
-
         return
 
     selected_alert_id = st.selectbox(
@@ -1052,8 +1325,6 @@ def display_alerts_page(
                         "alert_investigation_active"
                     ] = True
 
-                    # Keep the same result available to the
-                    # Audit Trail page.
                     st.session_state[
                         "investigation_result"
                     ] = result
@@ -1087,7 +1358,8 @@ def display_alerts_page(
                 )
 
                 display_result(
-                    alert_result
+                    user=user,
+                    result=alert_result,
                 )
 
 
@@ -1115,21 +1387,12 @@ def display_audit_page() -> None:
         st.info(
             "No investigation has been run in this session yet."
         )
-
         return
-
-    # ---------------------------------------------------------
-    # GET FINAL RESULT SAFELY
-    # ---------------------------------------------------------
 
     final_result = (
         result.get("final_result")
         or {}
     )
-
-    # ---------------------------------------------------------
-    # GET AUDIT EVENT
-    # ---------------------------------------------------------
 
     audit_event = final_result.get(
         "audit_event"
@@ -1143,8 +1406,6 @@ def display_audit_page() -> None:
     display_audit_event(
         audit_event
     )
-
-
 
 
 # ==================================================================
@@ -1174,6 +1435,7 @@ def display_evaluation_page() -> None:
 
     try:
         cases = load_cases()
+
     except Exception as exc:
         st.error(
             f"Unable to load evaluation cases: {exc}"
@@ -1191,7 +1453,8 @@ def display_evaluation_page() -> None:
     st.info(
         "The evaluation suite checks factual retrieval, risk signals, "
         "regulatory evidence, sanctions handling, evidence sufficiency, "
-        "RBAC, portfolio scope, and prompt-injection resistance."
+        "RBAC, portfolio scope, and other security-related evaluation "
+        "conditions. Prompt-injection defense is currently deferred."
     )
 
     # ---------------------------------------------------------
@@ -1230,7 +1493,6 @@ def display_evaluation_page() -> None:
             "No evaluation has been run yet. "
             "Click 'Run Evaluation' to start."
         )
-
         return
 
     # ---------------------------------------------------------
@@ -1244,7 +1506,6 @@ def display_evaluation_page() -> None:
     )
 
     failed = len(results) - passed
-
     total = len(results)
 
     pass_rate = (
@@ -1417,6 +1678,7 @@ def display_evaluation_page() -> None:
         st.info(
             "No evaluation checks were returned."
         )
+
     else:
         st.write(
             "**Checks:**"
@@ -1870,7 +2132,13 @@ user = create_user_context(
 # MAIN NAVIGATION
 # ==================================================================
 
-investigate_tab, alerts_tab, audit_tab, evaluation_tab, system_tab = st.tabs(
+(
+    investigate_tab,
+    alerts_tab,
+    audit_tab,
+    evaluation_tab,
+    system_tab,
+) = st.tabs(
     [
         "🔎 Investigate",
         "🚨 Alerts",
@@ -1881,15 +2149,11 @@ investigate_tab, alerts_tab, audit_tab, evaluation_tab, system_tab = st.tabs(
 )
 
 
-
-
-
 # ==================================================================
 # INVESTIGATE TAB
 # ==================================================================
 
 with investigate_tab:
-
     st.header(
         "Investigate"
     )
@@ -1955,7 +2219,8 @@ with investigate_tab:
         st.divider()
 
         display_result(
-            saved_result
+            user=user,
+            result=saved_result,
         )
 
 
@@ -1964,7 +2229,6 @@ with investigate_tab:
 # ==================================================================
 
 with alerts_tab:
-
     display_alerts_page(
         user=user
     )
@@ -1975,7 +2239,6 @@ with alerts_tab:
 # ==================================================================
 
 with audit_tab:
-
     display_audit_page()
 
 
@@ -1984,7 +2247,6 @@ with audit_tab:
 # ==================================================================
 
 with evaluation_tab:
-
     display_evaluation_page()
 
 
@@ -1993,5 +2255,4 @@ with evaluation_tab:
 # ==================================================================
 
 with system_tab:
-
     display_system_page()
