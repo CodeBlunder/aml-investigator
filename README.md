@@ -34,66 +34,6 @@ The system uses two agents:
 RBAC is enforced in the backend data-access layer before restricted data is passed to the agents.
 
 
-## Roles
-
-| Role                 | Access                                                             |
-| -------------------- | ------------------------------------------------------------------ |
-| CCO                  | Full investigation and customer access                             |
-| AML Analyst          | Transactions, alerts, sanctions and masked customer data           |
-| External Auditor     | Audit, rationale and evidence without raw customer/transaction PII |
-| Relationship Manager | Assigned-portfolio transactions, alerts and masked customer data   |
-
-Authorization is performed before restricted information is provided to the agents.
-
-
-## Example Investigation
-
-The main demonstration case is:
-
-```text
-Why was transaction TXN1042 flagged, and does it violate any applicable AML requirements?
-```
-
-The investigation combines:
-
-```text
-TXN1042 → $9,800 → UAE
-TXN1043 → $9,700 → UAE
-TXN1047 → $18,500 → Singapore
-ALT-102 → HIGH severity alert
-```
-
-The system identifies deterministic risk signals, retrieves relevant regulatory evidence, and produces an explainable investigation result.
-
-A probable sanctions match remains classified as **probable** and is not automatically treated as a confirmed match.
-
-## Project Structure
-
-```text
-aml-investigator/
-├── app/
-│   ├── agents/                 # Screening and Investigation agents
-│   ├── auth/                   # RBAC and user context
-│   ├── retrieval/              # Regulatory retrieval and ChromaDB
-│   ├── tools/                  # Controlled investigation tools
-│   ├── models.py               # Database models
-│   └── db.py                   # Database configuration
-│
-├── data/
-│   ├── raw/                    # Source documents
-│   ├── processed/              # Processed data
-│   └── understanding/          # Regulatory understanding files
-│
-├── eval/                       # Evaluation cases and runner
-├── frontend/                   # Streamlit application
-├── scripts/                    # Database/data/index setup scripts
-├── tests/                      # Automated tests
-│
-├── .env.example
-├── requirements.txt
-└── README.md
-```
-
 ## Setup
 
 ### 1. Create the environment
@@ -134,14 +74,6 @@ python -m scripts.index_regulations
 ```powershell
 streamlit run frontend\streamlit_app.py
 ```
-
-The Streamlit interface provides:
-
-* Investigation
-* Alerts
-* Audit Trail
-* Evaluation
-* System information
 
 ## Evaluation
 
