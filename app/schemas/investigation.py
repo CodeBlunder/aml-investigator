@@ -1,3 +1,4 @@
+
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -43,9 +44,9 @@ class CustomerEvidence(BaseModel):
     country: str
     occupation: str | None = None
     business_type: str | None = None
-    risk_rating: str
-    portfolio_id: str
-    kyc_status: str
+    risk_rating: str | None = None
+    portfolio_id: str | None = None
+    kyc_status: str | None = None
 
 
 # ============================================================
@@ -86,7 +87,7 @@ class SanctionsMatch(BaseModel):
     list_name: str
     match_type: str
     risk_level: str
-    matched_on: str
+    matched_on: str | None = None
 
 
 class SanctionsEvidence(BaseModel):
@@ -94,7 +95,7 @@ class SanctionsEvidence(BaseModel):
     Controlled sanctions search results.
     """
 
-    query: str
+    query: str | None = None
     match_count: int
     matches: list[SanctionsMatch] = Field(
         default_factory=list
@@ -122,85 +123,27 @@ class RiskSignal(BaseModel):
 # RISK ASSESSMENT
 # ============================================================
 
-
-from typing import Any
-
-from pydantic import BaseModel, Field
-
-
-class TransactionEvidence(BaseModel):
-    transaction_id: str
-    customer_id: str
-    account_id: str
-    timestamp: str
-    transaction_type: str
-    amount: float
-    currency: str
-    counterparty: str
-    country: str
-    description: str | None = None
-
-
-class CustomerEvidence(BaseModel):
-    customer_id: str
-    name: str
-    account_id: str
-    country: str
-    occupation: str | None = None
-    business_type: str | None = None
-    risk_rating: str | None = None
-    portfolio_id: str | None = None
-    kyc_status: str | None = None
-
-
-class AlertEvidence(BaseModel):
-    alert_id: str
-    customer_id: str
-    transaction_id: str | None = None
-    alert_type: str
-    severity: str
-    status: str
-    created_at: str | None = None
-    description: str | None = None
-
-
-class SanctionsMatch(BaseModel):
-    entity_id: str
-    name: str
-    aliases: str | None = None
-    country: str
-    list_name: str
-    match_type: str
-    risk_level: str
-    matched_on: str | None = None
-
-
-class SanctionsEvidence(BaseModel):
-    query: str | None = None
-    match_count: int
-    matches: list[SanctionsMatch] = Field(
-        default_factory=list
-    )
-
-
-class RiskSignal(BaseModel):
-    signal: str
-    weight: int
-    transaction_ids: list[str] = Field(
-        default_factory=list
-    )
-    explanation: str
-
-
-
 class RiskAssessment(BaseModel):
-    score: float = Field(ge=0, le=100)
+    """
+    Deterministic risk assessment with historical feedback
+    information preserved separately.
+    """
+
+    # Effective/current risk after historical feedback.
+    score: float = Field(
+        ge=0,
+        le=100,
+    )
     risk_level: str
+
     transaction_count: int
-    signals: list[RiskSignal] = Field(default_factory=list)
+
+    # Deterministic risk signals.
+    signals: list[RiskSignal] = Field(
+        default_factory=list
+    )
 
     # Original deterministic risk before historical feedback.
-    # Optional/defaulted so existing callers remain compatible.
     original_score: float | None = Field(
         default=None,
         ge=0,
@@ -211,7 +154,7 @@ class RiskAssessment(BaseModel):
     # Historical analyst feedback adjustment.
     feedback_adjustment: float = 0.0
 
-    # Effective risk after historical feedback.
+    # Explicit adjusted risk after historical feedback.
     adjusted_score: float | None = Field(
         default=None,
         ge=0,
@@ -220,23 +163,47 @@ class RiskAssessment(BaseModel):
     adjusted_risk_level: str | None = None
 
 
+# ============================================================
+# EVIDENCE SUFFICIENCY
+# ============================================================
 
 class EvidenceSufficiency(BaseModel):
+    """
+    Indicates whether the available evidence is sufficient
+    for reliable investigation.
+    """
+
     sufficient: bool
+
     missing_evidence: list[str] = Field(
         default_factory=list
     )
+
     explanation: str | None = None
 
 
+# ============================================================
+# INVESTIGATION PACKAGE
+# ============================================================
+
 class InvestigationPackage(BaseModel):
+    """
+    Structured handoff package produced by the Screening Agent
+    and consumed by the Investigation Agent.
+    """
+
     investigation_id: str
+
     customer: CustomerEvidence | None = None
+
     alert: AlertEvidence | None = None
+
     transactions: list[TransactionEvidence] = Field(
         default_factory=list
     )
+
     sanctions: SanctionsEvidence | None = None
+
     risk_assessment: RiskAssessment | None = None
 
     # Preserved for compatibility with the existing package.
@@ -248,3 +215,10 @@ class InvestigationPackage(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict
     )
+
+    # Optional LLM interpretation.
+    #
+    # This does not replace deterministic risk scoring or
+    # controlled evidence. It contains only the LLM's
+    # interpretation of already-authorized screening evidence.
+    llm_screening_summary: str | None = None

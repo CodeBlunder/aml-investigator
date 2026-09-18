@@ -16,9 +16,9 @@ evaluation_cases:
         - POSSIBLE_STRUCTURING
         - RAPID_MOVEMENT
       required_regulation_ids:
-        - AML-PROTOTYPE-001-R1
-        - AML-PROTOTYPE-001-R2
-        - AML-PROTOTYPE-001-R3
+        - RBI-KYC-2016-R1
+        - RBI-KYC-2016-R2
+        - RBI-KYC-2016-R3
       regulatory_violation_claim: false
       evidence_sufficient: true
 
@@ -101,7 +101,7 @@ evaluation_cases:
     expected:
       success: true
       required_regulation_ids:
-        - AML-PROTOTYPE-001-R2
+        - RBI-KYC-2016-R2
       regulatory_evidence_required: true
       citation_required: true
 

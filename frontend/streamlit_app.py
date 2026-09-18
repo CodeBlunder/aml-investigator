@@ -967,6 +967,23 @@ def display_result(
         package
     )
 
+    # ---------------------------------------------------------
+    # LLM SCREENING INTERPRETATION
+    # ---------------------------------------------------------
+
+    llm_screening_summary = package.get(
+        "llm_screening_summary"
+    )
+
+    if llm_screening_summary:
+        st.subheader(
+            "Screening Agent Interpretation"
+        )
+
+        st.info(
+            llm_screening_summary
+        )
+
     st.divider()
 
     # ---------------------------------------------------------

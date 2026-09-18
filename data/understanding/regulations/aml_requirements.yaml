@@ -1,57 +1,102 @@
+
 regulations:
-  - regulation_id: AML-PROTOTYPE-001
-    title: Suspicious Transaction Monitoring
-    jurisdiction: Prototype
-    source: Internal prototype regulatory understanding
-    source_document: prototype_aml_requirements
+
+  - regulation_id: RBI-KYC-2016
+    title: Master Direction - Know Your Customer (KYC) Direction, 2016
+    jurisdiction: India
+    regulator: Reserve Bank of India
+    source: Reserve Bank of India
+    source_document: rbi_master_direction_kyc_2016.pdf
+    source_url: https://www.rbi.org.in/commonman/Upload/English/Notification/PDFs/MD18KYCF6E92C82E1E1419D87323E3869BC9F13.pdf
+    source_updated_as_of: "2024-11-06"
+
     requirements:
-      - requirement_id: AML-PROTOTYPE-001-R1
+
+      - requirement_id: RBI-KYC-2016-R1
         topic: Transaction monitoring
         text: >
-          Financial institutions should monitor transactions for patterns
-          that may indicate suspicious or unusual activity and should
-          investigate relevant alerts using available customer and
-          transaction information.
+          Regulated entities should carry out ongoing due diligence on
+          business relationships and scrutinise transactions to ensure
+          that they are consistent with the institution's knowledge of the
+          customer, the customer's business and risk profile, and the
+          source of funds or wealth as appropriate.
         applicability:
           - transaction_monitoring
-          - suspicious_transaction_pattern
-
-      - requirement_id: AML-PROTOTYPE-001-R2
-        topic: Structuring indicators
-        text: >
-          Multiple transactions occurring within a short period and
-          remaining below a relevant threshold may require additional
-          review for possible structuring or other suspicious patterns.
-        applicability:
           - structuring
           - repeated_transactions
+          - unusual_transaction
+          - unusual_pattern
+          - complex_transaction
+          - large_transaction
 
-      - requirement_id: AML-PROTOTYPE-001-R3
-        topic: International transactions
+      - requirement_id: RBI-KYC-2016-R2
+        topic: Unusual transactions
         text: >
-          Cross-border transactions involving unusual jurisdictions,
-          counterparties, or transaction patterns may require enhanced
-          review based on the institution's risk-based controls.
+          Regulated entities should pay special attention to all complex,
+          unusually large transactions and unusual patterns of transactions
+          that have no apparent economic or lawful purpose.
         applicability:
-          - unusual_geography
-          - international_transaction
+          - transaction_monitoring
+          - unusual_transaction
+          - unusual_pattern
+          - complex_transaction
+          - large_transaction
 
-      - requirement_id: AML-PROTOTYPE-001-R4
-        topic: Evidence and investigation
+      - requirement_id: RBI-KYC-2016-R3
+        topic: Risk based monitoring
         text: >
-          Investigation conclusions should be supported by available
-          transaction, customer, alert, sanctions, and regulatory evidence.
+          The extent of monitoring should be aligned with the customer's
+          risk categorisation and the institution should apply enhanced
+          scrutiny where the customer's risk profile warrants it.
+        applicability:
+          - transaction_monitoring
+          - risk_based_monitoring
+          - customer_risk
+
+      - requirement_id: RBI-KYC-2016-R4
+        topic: Customer information and source of funds
+        text: >
+          Ongoing due diligence should consider whether transactions are
+          consistent with the institution's knowledge of the customer,
+          including the customer's business and risk profile and, where
+          necessary, the source of funds or wealth.
+        applicability:
+          - ongoing_due_diligence
+          - source_of_funds
+          - customer_profile
+          - transaction_monitoring
+
+      - requirement_id: RBI-KYC-2016-R5
+        topic: Suspicious transaction monitoring
+        text: >
+          Regulated entities should have appropriate systems and controls
+          for identifying transactions and activity that may require
+          investigation and reporting under applicable anti-money-laundering
+          requirements.
+        applicability:
+          - suspicious_transaction_pattern
+          - transaction_monitoring
+          - alert_investigation
+
+      - requirement_id: RBI-KYC-2016-R6
+        topic: Investigation evidence
+        text: >
+          Transaction monitoring and investigation should be supported by
+          relevant customer and transaction information available to the
+          regulated entity.
         applicability:
           - investigation
           - evidence
+          - customer_information
+          - transaction_information
 
-      - requirement_id: AML-PROTOTYPE-001-R5
-        topic: Sanctions screening
+      - requirement_id: RBI-KYC-2016-R7
+        topic: Beneficial ownership and customer identification
         text: >
-          Potential sanctions matches should be reviewed using appropriate
-          identifying information and should not automatically be treated
-          as confirmed sanctions matches when the available evidence only
-          indicates a probable or partial match.
+          Customer due diligence includes obtaining and maintaining
+          appropriate information needed to identify customers and,
+          where applicable, beneficial owners.
         applicability:
-          - sanctions
-          - probable_match
+          - customer_due_diligence
+          - customer_identification
+          - beneficial_owner

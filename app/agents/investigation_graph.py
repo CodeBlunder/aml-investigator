@@ -329,6 +329,7 @@ def screening_node(
             transaction_id=transaction_id,
             alert_id=alert_id,
             sanctions_query=sanctions_query,
+            user_query=query,
         )
 
         result = {

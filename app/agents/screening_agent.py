@@ -1,7 +1,7 @@
 
 from datetime import datetime, timezone
 from uuid import uuid4
-
+from app.llm.client import LLMClient
 from app.auth.context import UserContext
 from app.feedback.repository import FeedbackRepository
 from app.scoring.risk_engine import (
@@ -382,15 +382,186 @@ class ScreeningAgent:
 
     def __init__(self, db):
         self.db = db
+        self.llm=LLMClient()
+def _build_llm_screening_summary(
+    self,
+    package: InvestigationPackage,
+    user_query: str | None = None,
+) -> str | None:
+    """
+    Ask the LLM to interpret a compact version of the already-authorized
+    screening evidence.
+
+    Only relevant evidence is sent to the LLM to reduce token usage.
+    The LLM does not access the database or make authorization decisions.
+    """
+
+    if not package.evidence_sufficiency.sufficient:
+        return (
+            "LLM screening interpretation was not generated "
+            "because the available core evidence is insufficient."
+        )
+
+    system_prompt = """
+You are the Screening Agent's analysis assistant for an
+internal AML investigation platform.
+
+Your task is to summarize the screening evidence provided to you.
+
+Rules:
+- Use only the evidence supplied in the user prompt.
+- Do not invent facts.
+- Do not make a final regulatory or legal conclusion.
+- Do not claim that suspicious activity is proven.
+- Distinguish deterministic risk signals from your interpretation.
+- Treat PROBABLE or PARTIAL sanctions matches as potential matches,
+  never as confirmed sanctions matches.
+- Mention important uncertainty or missing evidence.
+- Keep the response concise and suitable for an AML analyst.
+"""
+
+    # ---------------------------------------------------------
+    # BUILD A COMPACT EVIDENCE PAYLOAD
+    # ---------------------------------------------------------
+
+    transactions = [
+        {
+            "transaction_id": tx.transaction_id,
+            "timestamp": tx.timestamp,
+            "transaction_type": tx.transaction_type,
+            "amount": tx.amount,
+            "currency": tx.currency,
+            "counterparty": tx.counterparty,
+            "country": tx.country,
+            "description": tx.description,
+        }
+        for tx in package.transactions
+    ]
+
+    risk = package.risk_assessment
+
+    risk_data = None
+
+    if risk:
+        risk_data = {
+            "score": risk.score,
+            "risk_level": risk.risk_level,
+            "transaction_count": risk.transaction_count,
+            "signals": [
+                {
+                    "signal": signal.signal,
+                    "weight": signal.weight,
+                    "transaction_ids": signal.transaction_ids,
+                    "explanation": signal.explanation,
+                }
+                for signal in risk.signals
+            ],
+            "feedback_adjustment": risk.feedback_adjustment,
+        }
+
+    alert_data = None
+
+    if package.alert:
+        alert_data = {
+            "alert_id": package.alert.alert_id,
+            "alert_type": package.alert.alert_type,
+            "severity": package.alert.severity,
+            "status": package.alert.status,
+            "description": package.alert.description,
+        }
+
+    sanctions_data = None
+
+    if package.sanctions:
+        sanctions_data = {
+            "query": package.sanctions.query,
+            "match_count": package.sanctions.match_count,
+            "matches": [
+                {
+                    "entity_id": match.entity_id,
+                    "name": match.name,
+                    "country": match.country,
+                    "list_name": match.list_name,
+                    "match_type": match.match_type,
+                    "risk_level": match.risk_level,
+                    "matched_on": match.matched_on,
+                }
+                for match in package.sanctions.matches
+            ],
+        }
+
+    compact_evidence = {
+        "customer": (
+            {
+                "customer_id": package.customer.customer_id,
+                "name": package.customer.name,
+                "country": package.customer.country,
+                "occupation": package.customer.occupation,
+                "business_type": package.customer.business_type,
+                "risk_rating": package.customer.risk_rating,
+                "kyc_status": package.customer.kyc_status,
+            }
+            if package.customer
+            else None
+        ),
+        "transactions": transactions,
+        "risk_assessment": risk_data,
+        "alert": alert_data,
+        "sanctions": sanctions_data,
+        "evidence_sufficiency": {
+            "sufficient": package.evidence_sufficiency.sufficient,
+            "missing_evidence": (
+                package.evidence_sufficiency.missing_evidence
+            ),
+        },
+    }
+
+    user_prompt = f"""
+Investigation query:
+{user_query or "Review the available screening evidence."}
+
+Authorized screening evidence:
+{compact_evidence}
+
+Provide a concise screening interpretation covering:
+
+1. The main transaction pattern.
+2. The deterministic risk signals present.
+3. Relevant alert or sanctions evidence, if available.
+4. Important uncertainty or missing evidence.
+5. What should be reviewed next.
+
+Do not provide a final regulatory determination.
+"""
+
+    try:
+        return self.llm.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+    except Exception as exc:
+        # LLM failure must not break the deterministic
+        # investigation workflow.
+        print(
+            f"LLM screening error: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        return None
+
+
+
+
 
     def investigate(
-        self,
-        user: UserContext,
-        customer_id: str | None = None,
-        transaction_id: str | None = None,
-        alert_id: str | None = None,
-        sanctions_query: str | None = None,
-    ) -> InvestigationPackage:
+    self,
+    user: UserContext,
+    customer_id: str | None = None,
+    transaction_id: str | None = None,
+    alert_id: str | None = None,
+    sanctions_query: str | None = None,
+    user_query: str | None = None,
+) -> InvestigationPackage:
 
         investigation_id = (
             f"INV-{uuid4().hex[:8].upper()}"
@@ -700,7 +871,7 @@ class ScreeningAgent:
         # Keep the package-level metadata focused on identity
         # and generation context. Risk state remains available
         # through the structured RiskAssessment object.
-        return InvestigationPackage(
+        package = InvestigationPackage(
             investigation_id=investigation_id,
             customer=customer,
             alert=alert,
@@ -709,4 +880,17 @@ class ScreeningAgent:
             risk_assessment=risk_assessment,
             evidence_sufficiency=evidence,
             metadata=package_metadata,
+        )
+
+        # Ask the LLM to interpret only the already-authorized
+        # screening evidence.
+        llm_summary = self._build_llm_screening_summary(
+            package,
+            user_query=user_query,
+        )
+
+        return package.model_copy(
+            update={
+                "llm_screening_summary": llm_summary,
+            }
         )

@@ -26,7 +26,10 @@ class RegulatoryChromaIndexer:
                 f"Regulatory source file not found: {self.source_path}"
             )
 
-        self.persist_directory.mkdir(parents=True, exist_ok=True)
+        self.persist_directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         self.client = chromadb.PersistentClient(
             path=str(self.persist_directory)
@@ -36,28 +39,59 @@ class RegulatoryChromaIndexer:
             name=self.COLLECTION_NAME
         )
 
-        self.model = SentenceTransformer(self.EMBEDDING_MODEL)
+        self.model = SentenceTransformer(
+            self.EMBEDDING_MODEL
+        )
 
     def _load_requirements(self) -> list[dict[str, Any]]:
-        with self.source_path.open("r", encoding="utf-8") as file:
+        """Load structured regulatory requirements from YAML."""
+
+        with self.source_path.open(
+            "r",
+            encoding="utf-8",
+        ) as file:
             content = yaml.safe_load(file) or {}
 
         requirements = []
 
-        for regulation in content.get("regulations", []):
-            for requirement in regulation.get("requirements", []):
+        for regulation in content.get(
+            "regulations",
+            [],
+        ):
+            for requirement in regulation.get(
+                "requirements",
+                [],
+            ):
                 requirements.append(
                     {
-                        "regulation_id": regulation.get("regulation_id"),
-                        "title": regulation.get("title"),
-                        "jurisdiction": regulation.get("jurisdiction"),
-                        "source": regulation.get("source"),
-                        "source_document": regulation.get("source_document"),
-                        "requirement_id": requirement.get("requirement_id"),
-                        "topic": requirement.get("topic"),
-                        "text": requirement.get("text", "").strip(),
+                        "regulation_id": regulation.get(
+                            "regulation_id"
+                        ),
+                        "title": regulation.get(
+                            "title"
+                        ),
+                        "jurisdiction": regulation.get(
+                            "jurisdiction"
+                        ),
+                        "source": regulation.get(
+                            "source"
+                        ),
+                        "source_document": regulation.get(
+                            "source_document"
+                        ),
+                        "requirement_id": requirement.get(
+                            "requirement_id"
+                        ),
+                        "topic": requirement.get(
+                            "topic"
+                        ),
+                        "text": requirement.get(
+                            "text",
+                            "",
+                        ).strip(),
                         "applicability": requirement.get(
-                            "applicability", []
+                            "applicability",
+                            [],
                         ),
                     }
                 )
@@ -65,7 +99,28 @@ class RegulatoryChromaIndexer:
         return requirements
 
     def index(self) -> dict[str, int]:
+        """
+        Rebuild the regulatory collection from the current YAML source.
+
+        Rebuilding prevents stale regulatory requirements from previous
+        source versions from remaining in the persistent Chroma collection.
+        """
+
         requirements = self._load_requirements()
+
+        # Recreate the collection so removed requirements from an older
+        # regulatory source cannot remain in the persistent index.
+        try:
+            self.client.delete_collection(
+                name=self.COLLECTION_NAME
+            )
+        except Exception:
+            # The collection may not exist yet.
+            pass
+
+        self.collection = self.client.get_or_create_collection(
+            name=self.COLLECTION_NAME
+        )
 
         if not requirements:
             return {
@@ -78,26 +133,57 @@ class RegulatoryChromaIndexer:
         metadatas = []
 
         for requirement in requirements:
-            requirement_id = requirement["requirement_id"]
+            requirement_id = requirement[
+                "requirement_id"
+            ]
 
-            applicability = requirement["applicability"]
+            applicability = requirement[
+                "applicability"
+            ]
 
             metadata = {
-                "regulation_id": requirement["regulation_id"] or "",
-                "title": requirement["title"] or "",
-                "jurisdiction": requirement["jurisdiction"] or "",
-                "source": requirement["source"] or "",
-                "source_document": requirement["source_document"] or "",
-                "requirement_id": requirement_id or "",
-                "topic": requirement["topic"] or "",
-                "applicability": ",".join(applicability),
+                "regulation_id": (
+                    requirement["regulation_id"]
+                    or ""
+                ),
+                "title": (
+                    requirement["title"]
+                    or ""
+                ),
+                "jurisdiction": (
+                    requirement["jurisdiction"]
+                    or ""
+                ),
+                "source": (
+                    requirement["source"]
+                    or ""
+                ),
+                "source_document": (
+                    requirement["source_document"]
+                    or ""
+                ),
+                "requirement_id": (
+                    requirement_id
+                    or ""
+                ),
+                "topic": (
+                    requirement["topic"]
+                    or ""
+                ),
+                "applicability": ",".join(
+                    applicability
+                ),
             }
 
             ids.append(requirement_id)
-            documents.append(requirement["text"])
+            documents.append(
+                requirement["text"]
+            )
             metadatas.append(metadata)
 
-        embeddings = self.model.encode(documents).tolist()
+        embeddings = self.model.encode(
+            documents
+        ).tolist()
 
         self.collection.upsert(
             ids=ids,
@@ -117,6 +203,8 @@ class RegulatoryChromaIndexer:
         *,
         max_results: int = 5,
     ) -> list[dict[str, Any]]:
+        """Search the indexed regulatory requirements semantically."""
+
         if not query or not query.strip():
             return []
 
@@ -129,14 +217,31 @@ class RegulatoryChromaIndexer:
             n_results=max_results,
         )
 
-        documents = results.get("documents", [[]])[0]
-        metadatas = results.get("metadatas", [[]])[0]
-        distances = results.get("distances", [[]])[0]
-        ids = results.get("ids", [[]])[0]
+        documents = results.get(
+            "documents",
+            [[]],
+        )[0]
+
+        metadatas = results.get(
+            "metadatas",
+            [[]],
+        )[0]
+
+        distances = results.get(
+            "distances",
+            [[]],
+        )[0]
+
+        ids = results.get(
+            "ids",
+            [[]],
+        )[0]
 
         matches = []
 
-        for index, document in enumerate(documents):
+        for index, document in enumerate(
+            documents
+        ):
             matches.append(
                 {
                     "requirement_id": ids[index],
