@@ -33,20 +33,6 @@ The system uses two agents:
 
 RBAC is enforced in the backend data-access layer before restricted data is passed to the agents.
 
-## Main Features
-
-* Natural-language AML investigation queries
-* Two-agent workflow with structured handoff
-* Role-based access control
-* Customer PII masking
-* Relationship Manager portfolio restrictions
-* Deterministic AML risk signals
-* Sanctions/watchlist screening
-* Regulatory evidence retrieval
-* ChromaDB semantic regulatory index
-* Analyst feedback mechanism
-* Audit logging
-* Automated evaluation suite
 
 ## Roles
 
@@ -59,20 +45,6 @@ RBAC is enforced in the backend data-access layer before restricted data is pass
 
 Authorization is performed before restricted information is provided to the agents.
 
-## Data
-
-Transaction, customer, alert, sanctions and feedback data is synthetic.
-
-Regulatory evidence is based on the public **RBI Master Direction - Know Your Customer (KYC) Direction, 2016**.
-
-```text
-data/
-├── raw/                         # Source regulatory document
-├── understanding/              # Structured regulatory requirements
-└── chroma/                      # Regulatory vector index
-```
-
-No real customer PII is used.
 
 ## Example Investigation
 
@@ -185,85 +157,6 @@ Run the complete automated tests with:
 python -m pytest -q
 ```
 
-The evaluation suite covers areas including:
-
-* Transaction investigation
-* Related transactions
-* Deterministic risk assessment
-* Alerts
-* Sanctions screening
-* Regulatory evidence
-* RBAC restrictions
-* Insufficient or missing data
-
-Update the final pass counts in this README after the final test run.
-
-## Security Design
-
-The application does not allow the agents to execute arbitrary SQL.
-
-Instead, agents use controlled backend tools such as:
-
-```text
-get_transaction()
-search_transactions()
-get_customer()
-get_alert()
-find_alerts()
-search_sanctions()
-search_regulations()
-```
-
-This provides a constrained interface between the agents and the underlying data.
-
-RBAC and row-level restrictions are enforced before data is returned.
-
-## Feedback
-
-Analyst feedback can be recorded against investigation outcomes.
-
-The current feedback signals include:
-
-```text
-TRUE_HIT
-FALSE_POSITIVE
-ESCALATED
-```
-
-Feedback is intended to provide a mechanism for improving future investigation behavior.
-
-## Regulatory Evidence
-
-The regulatory pipeline is:
-
-```text
-RBI PDF
-   ↓
-PDF extraction
-   ↓
-Structured requirements
-   ↓
-ChromaDB indexing
-   ↓
-Semantic retrieval
-   ↓
-Investigation Agent
-```
-
-The regulatory understanding files and indexing script are included so the regulatory index can be regenerated.
-
-## Current Limitations
-
-This is a prototype and is not intended for production banking use.
-
-The current implementation has simplified:
-
-* AML risk rules
-* Regulatory retrieval
-* Database infrastructure
-* LLM infrastructure
-* Feedback learning
-
 Prompt-injection defense is not implemented in the current version and is treated as a deferred bonus feature.
 
 ## What Breaks at 100×
@@ -285,23 +178,3 @@ At much larger scale, the system would need scalable search infrastructure, meta
 LLM provider rate limits can become a bottleneck with many concurrent investigations.
 
 A production system would require caching, throttling, asynchronous processing, fallback models/providers and stronger observability.
-
-## Summary
-
-AML Investigator demonstrates an end-to-end agentic AML investigation workflow while keeping critical controls outside the LLM.
-
-The design separates:
-
-```text
-Authorization
-    +
-Deterministic risk detection
-    +
-Evidence retrieval
-    +
-Agent reasoning
-    +
-Auditability
-```
-
-This allows the LLM to assist with investigation and explanation without making it the authority for access control or deterministic AML risk decisions.
