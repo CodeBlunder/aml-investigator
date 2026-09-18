@@ -1,0 +1,57 @@
+regulations:
+  - regulation_id: AML-PROTOTYPE-001
+    title: Suspicious Transaction Monitoring
+    jurisdiction: Prototype
+    source: Internal prototype regulatory understanding
+    source_document: prototype_aml_requirements
+    requirements:
+      - requirement_id: AML-PROTOTYPE-001-R1
+        topic: Transaction monitoring
+        text: >
+          Financial institutions should monitor transactions for patterns
+          that may indicate suspicious or unusual activity and should
+          investigate relevant alerts using available customer and
+          transaction information.
+        applicability:
+          - transaction_monitoring
+          - suspicious_transaction_pattern
+
+      - requirement_id: AML-PROTOTYPE-001-R2
+        topic: Structuring indicators
+        text: >
+          Multiple transactions occurring within a short period and
+          remaining below a relevant threshold may require additional
+          review for possible structuring or other suspicious patterns.
+        applicability:
+          - structuring
+          - repeated_transactions
+
+      - requirement_id: AML-PROTOTYPE-001-R3
+        topic: International transactions
+        text: >
+          Cross-border transactions involving unusual jurisdictions,
+          counterparties, or transaction patterns may require enhanced
+          review based on the institution's risk-based controls.
+        applicability:
+          - unusual_geography
+          - international_transaction
+
+      - requirement_id: AML-PROTOTYPE-001-R4
+        topic: Evidence and investigation
+        text: >
+          Investigation conclusions should be supported by available
+          transaction, customer, alert, sanctions, and regulatory evidence.
+        applicability:
+          - investigation
+          - evidence
+
+      - requirement_id: AML-PROTOTYPE-001-R5
+        topic: Sanctions screening
+        text: >
+          Potential sanctions matches should be reviewed using appropriate
+          identifying information and should not automatically be treated
+          as confirmed sanctions matches when the available evidence only
+          indicates a probable or partial match.
+        applicability:
+          - sanctions
+          - probable_match

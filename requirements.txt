@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+python-dotenv
+langgraph
+pymupdf
+chromadb
+sentence-transformers
+pandas
+openpyxl
+streamlit
+pytest
+pyyaml
