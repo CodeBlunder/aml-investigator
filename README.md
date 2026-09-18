@@ -7,7 +7,7 @@ The system allows an authorized compliance user to investigate transactions usin
 This project is intentionally scoped as a working prototype.
 
 
-<img width="1312" height="1199" alt="image" src="https://github.com/user-attachments/assets/3cc8a822-68bc-48f7-9eea-a67976c936dc" />
+<img width="1536" height="1024" alt="Final" src="https://github.com/user-attachments/assets/7257d884-3f39-4f9f-b676-445056c11b5c" />
 
 
 ## Architecture
